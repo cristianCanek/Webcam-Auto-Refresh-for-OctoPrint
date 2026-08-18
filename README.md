@@ -3,48 +3,53 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.3.1
+## Version 0.3.2
 
-Second experimental attempt at integrating directly with Classic Webcam.
+Restored working automatic webcam state synchronization by correctly discovering the Classic Webcam ViewModel after OctoPrint finished binding its ViewModels.
 
-> **Development note:** this version was not functional in the original test environment.
+> **Development note:** this version restored the functionality that was broken in v0.3.0 and v0.3.1, but introduced a visual layout issue in the offline state.
 
 
 ### Status
 
-Experimental / known broken.
+Working, with a known offline layout issue.
 
 
-### Changed in v0.3.1
+### Fixed in v0.3.2
 
-- Reworked the webcam refresh strategy to use Classic Webcam's native ViewModel.
-- Attempted to call Classic Webcam's own refresh handler instead of manually rebuilding the stream.
-- Kept the configurable poll interval and transition delay introduced in v0.3.0.
+- Correctly discovers `ClassicWebcamViewModel` after all OctoPrint ViewModels are bound.
+- Restores automatic webcam ON/OFF synchronization.
+- Retrieves the configured MJPEG stream URL from Classic Webcam.
+- Restores automatic stream reconnection when the webcam comes back online.
 
 
 ### Retained from previous versions
 
-- Automatic webcam ON/OFF state detection.
-- Snapshot-based health checking.
+- Snapshot-based webcam health checking.
 - OctoPrint Settings page.
 - Configurable **Poll interval**.
 - Configurable **Transition delay**.
+- No full-page OctoPrint reload.
 
 
 ### Known issue
 
-The Classic Webcam ViewModel dependency was not obtained in the way expected by this implementation, so automatic UI refresh still did not work.
+When the webcam goes offline, this version adds a custom offline panel inside the Classic Webcam container.
+
+Because Classic Webcam already maintains its own offline area, the webcam section becomes approximately twice as tall while the stream is unavailable.
+
+This layout issue was fixed in v0.3.3.
 
 
-### Intended behavior
+### Behavior
 
 - Periodically checks whether the webcam is available.
 - Detects webcam **ON/OFF** transitions.
-- Uses Classic Webcam's own ViewModel refresh method when the state changes.
-- Avoids reloading the complete OctoPrint page.
+- Discovers the real `ClassicWebcamViewModel`.
+- Retrieves the configured stream URL from Classic Webcam.
+- Clears and hides the MJPEG image when the webcam goes offline.
+- Rebuilds the MJPEG stream connection when the webcam comes back online.
 - Keeps polling interval and transition delay configurable from OctoPrint Settings.
-
-> The Classic Webcam ViewModel dependency was not resolved correctly in the original test environment, so the automatic refresh path did not work.
 
 
 ### Configuration
@@ -63,7 +68,7 @@ Delay:              500 ms
 
 *The defaults are recommended for most local-network installations.*
 
-This version shifted focus from direct stream reconstruction to integrating with Classic Webcam's own refresh logic through its ViewModel.
+This version discovers the actual Classic Webcam ViewModel after OctoPrint finishes binding its ViewModels and uses it to obtain the configured MJPEG stream URL.
 
 
 ## Why?
@@ -77,14 +82,20 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.3.1 changes the refresh strategy introduced in v0.3.0.
+Version 0.3.2 fixes the ViewModel integration attempted in v0.3.1.
 
-Instead of rebuilding the webcam stream directly, it attempts to obtain the Classic Webcam ViewModel and invoke its native refresh handler whenever the detected webcam state changes.
+Instead of expecting Classic Webcam to be available as a direct dependency, the plugin waits until OctoPrint has finished binding its ViewModels and searches the complete ViewModel list for `ClassicWebcamViewModel`.
 
 Conceptually:
 
 ```text
-Periodic snapshot health check
+OctoPrint ViewModels finish binding
+          │
+          ▼
+Find ClassicWebcamViewModel
+          │
+          ▼
+Start periodic snapshot health checks
           │
           ▼
 Is webcam available?
@@ -102,13 +113,23 @@ Is webcam available?
          YES
           │
           ▼
-Find Classic Webcam ViewModel
-          │
-          ▼
-Call native webcam refresh
+Update Classic Webcam DOM
 ```
 
-The ViewModel dependency was not obtained correctly in the original test environment, so the final refresh step did not execute as intended.
+When the webcam comes online, the stream URL is obtained from `ClassicWebcamViewModel` and assigned to the webcam image element.
+
+When the webcam goes offline, the MJPEG image is cleared and hidden.
+
+This restored automatic webcam synchronization without reloading the full OctoPrint page.
+
+
+### Offline layout issue
+
+This version also creates its own offline status panel inside the Classic Webcam container.
+
+Because Classic Webcam already renders its own offline area, the result is an unnecessarily tall webcam section while the camera is OFF.
+
+This issue is corrected in v0.3.3.
 
 
 ## Example use case
@@ -132,10 +153,8 @@ Webcam Auto Refresh
           │
           └── Detects webcam state
                     │
-                    └── Requests Classic Webcam refresh
+                    └── Updates Classic Webcam DOM
 ```
-
-*In v0.3.1, the Classic Webcam ViewModel dependency was not resolved correctly, so this refresh path was not functional in the original test environment.*
 
 The plugin does not need to know how the webcam was turned on or off; it only observes its state.
 
@@ -156,11 +175,9 @@ and:
 s6-svc -d /run/s6/services/mjpg-streamer
 ```
 
-The intended behavior is to detect the resulting state change and ask Classic Webcam to refresh its own view without reloading the rest of OctoPrint.
+The plugin detects the resulting state change and updates the webcam view automatically without reloading the rest of OctoPrint.
 
-Because the Classic Webcam ViewModel dependency was not resolved correctly in v0.3.1, this did not work in the original test environment.
-
-The design is intended to support integration with OctoPrint System Commands, power-control plugins, smart plugs, or other automation systems.
+This makes it possible to combine it with OctoPrint System Commands, power-control plugins, smart plugs, or other automation systems.
 
 
 ## Debugging
@@ -177,9 +194,19 @@ and filter for:
 Webcam Auto Refresh
 ```
 
-The main failure mode in this version is that the Classic Webcam ViewModel is not available through the dependency mechanism expected by this implementation.
+Typical output:
 
-As a result, the plugin can detect state changes but cannot reliably trigger Classic Webcam's native refresh behavior.
+```text
+[Webcam Auto Refresh] Poll interval: 2000 ms
+[Webcam Auto Refresh] Transition delay: 500 ms
+[Webcam Auto Refresh] ClassicWebcamViewModel found
+[Webcam Auto Refresh] Polling started every 2000 ms
+[Webcam Auto Refresh] Initial state: OFF
+[Webcam Auto Refresh] State changed: OFF -> ON
+[Webcam Auto Refresh] UI -> ON /webcam/?action=stream
+[Webcam Auto Refresh] State changed: ON -> OFF
+[Webcam Auto Refresh] UI -> OFF
+```
 
 
 ## Requirements
@@ -243,17 +270,17 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.3.1)
+Webcam Auto Refresh (0.3.2)
 ```
 
 
 ## Limitations
 
-- Classic Webcam ViewModel dependency resolution does not work correctly in the original test environment.
-- Automatic webcam UI refresh is therefore non-functional in this release.
+- The custom offline panel causes the Classic Webcam area to become approximately twice as tall while the webcam is OFF.
 - Snapshot health checking still depends on the expected webcam endpoint.
 - No transient-failure protection.
 - Single-camera design.
+- Direct DOM manipulation depends on the Classic Webcam HTML structure.
 - Only polling interval and transition delay are configurable.
 
 

@@ -5,7 +5,8 @@ $(function () {
         const self = this;
 
         self.settingsViewModel = parameters[0];
-        self.classicWebcamViewModel = parameters[1];
+
+        self.classicWebcamViewModel = null;
 
         self.previousState = null;
         self.requestInProgress = false;
@@ -14,8 +15,12 @@ $(function () {
         self.pollInterval = 2000;
         self.transitionDelay = 500;
 
-        // La URL de snapshot permanece estable en nuestra
-        // instalación y se usa únicamente como health check.
+        /*
+         * Health check.
+         *
+         * Por ahora dejamos únicamente ESTA URL fija.
+         * En v0.4 la obtendremos del backend/plugin.
+         */
         self.snapshotUrl =
             "http://localhost:8080/?action=snapshot";
 
@@ -26,13 +31,19 @@ $(function () {
             );
         };
 
+
+        /*
+         * ------------------------------------------------------
+         * Settings
+         * ------------------------------------------------------
+         */
+
         self.loadPluginSettings = function () {
             try {
-                const settings =
-                    self.settingsViewModel.settings;
-
                 const plugin =
-                    settings.plugins
+                    self.settingsViewModel
+                        .settings
+                        .plugins
                         .webcam_auto_refresh;
 
                 self.pollInterval =
@@ -50,8 +61,8 @@ $(function () {
             } catch (error) {
                 console.warn(
                     "[Webcam Auto Refresh] " +
-                    "Could not read plugin settings, " +
-                    "using defaults.",
+                    "Could not read plugin settings. " +
+                    "Using defaults.",
                     error
                 );
             }
@@ -69,28 +80,209 @@ $(function () {
             );
         };
 
-        self.refreshWebcam = function () {
-            self.log(
-                "Refreshing Classic Webcam"
+
+        /*
+         * ------------------------------------------------------
+         * Classic Webcam discovery
+         * ------------------------------------------------------
+         */
+
+        self.findClassicWebcamViewModel =
+            function (allViewModels) {
+
+                self.classicWebcamViewModel =
+                    allViewModels.find(function (vm) {
+
+                        return (
+                            vm &&
+                            vm.constructor &&
+                            vm.constructor.name ===
+                                "ClassicWebcamViewModel"
+                        );
+
+                    }) || null;
+
+                if (self.classicWebcamViewModel) {
+                    self.log(
+                        "ClassicWebcamViewModel found"
+                    );
+                } else {
+                    console.warn(
+                        "[Webcam Auto Refresh] " +
+                        "ClassicWebcamViewModel not found"
+                    );
+                }
+            };
+
+
+        /*
+         * ------------------------------------------------------
+         * DOM helpers
+         * ------------------------------------------------------
+         */
+
+        self.getWebcamImage = function () {
+            return $("#webcam_image");
+        };
+
+
+        self.getWebcamContainer = function () {
+            return $("#classicwebcam_container");
+        };
+
+
+        self.removeOfflineMessage = function () {
+            $("#classicwebcam_container")
+                .find(
+                    ".webcam-auto-refresh-offline"
+                )
+                .remove();
+        };
+
+
+        /*
+         * ------------------------------------------------------
+         * OFF state
+         * ------------------------------------------------------
+         */
+
+        self.showOfflineState = function () {
+            const image =
+                self.getWebcamImage();
+
+            const container =
+                self.getWebcamContainer();
+
+            /*
+             * Muy importante:
+             * rompemos la conexión MJPEG anterior.
+             */
+            image.attr("src", "");
+            image.hide();
+
+            self.removeOfflineMessage();
+
+            container.append(
+                '<div ' +
+                'class="webcam-auto-refresh-offline" ' +
+                'style="' +
+                'display:flex;' +
+                'align-items:center;' +
+                'justify-content:center;' +
+                'height:100%;' +
+                'min-height:300px;' +
+                'background:#111;' +
+                'color:#fff;' +
+                'font-weight:bold;' +
+                'text-align:center;' +
+                '">' +
+                'Webcam stream not available' +
+                '</div>'
             );
 
-            if (
-                self.classicWebcamViewModel &&
-                typeof self.classicWebcamViewModel
-                    .onWebcamRefresh === "function"
-            ) {
-                self.classicWebcamViewModel
-                    .onWebcamRefresh();
+            self.log("UI -> OFF");
+        };
+
+
+        /*
+         * ------------------------------------------------------
+         * ON state
+         * ------------------------------------------------------
+         */
+
+        self.showOnlineState = function () {
+            const image =
+                self.getWebcamImage();
+
+            self.removeOfflineMessage();
+
+            let streamUrl = null;
+
+            /*
+             * Leemos la URL directamente del
+             * ClassicWebcamViewModel real.
+             */
+            try {
+                streamUrl =
+                    self.classicWebcamViewModel
+                        .settings
+                        .streamUrl();
+            } catch (error) {
+                console.error(
+                    "[Webcam Auto Refresh] " +
+                    "Could not obtain Classic Webcam " +
+                    "stream URL",
+                    error
+                );
 
                 return;
             }
 
-            console.warn(
-                "[Webcam Auto Refresh] " +
-                "Classic Webcam refresh function " +
-                "not available"
+            if (!streamUrl) {
+                console.error(
+                    "[Webcam Auto Refresh] " +
+                    "Classic Webcam stream URL is empty"
+                );
+
+                return;
+            }
+
+            /*
+             * Cache buster explícito.
+             */
+            const separator =
+                streamUrl.includes("?")
+                    ? "&"
+                    : "?";
+
+            const newUrl =
+                streamUrl +
+                separator +
+                "_=" +
+                Date.now();
+
+            image.attr(
+                "src",
+                newUrl
+            );
+
+            image.show();
+
+            self.log(
+                "UI -> ON",
+                streamUrl
             );
         };
+
+
+        /*
+         * ------------------------------------------------------
+         * State transition
+         * ------------------------------------------------------
+         */
+
+        self.applyState = function (online) {
+
+            setTimeout(
+                function () {
+
+                    if (online) {
+                        self.showOnlineState();
+                    } else {
+                        self.showOfflineState();
+                    }
+
+                },
+                self.transitionDelay
+            );
+        };
+
+
+        /*
+         * ------------------------------------------------------
+         * Health check
+         * ------------------------------------------------------
+         */
 
         self.checkWebcam = function () {
             if (self.requestInProgress) {
@@ -106,12 +298,16 @@ $(function () {
                 }
             )
             .done(function (response) {
+
                 const currentState =
                     response.result === true;
 
-                // Primera lectura:
-                // sólo memorizar estado.
+                /*
+                 * Primera lectura:
+                 * sólo sincronizamos estado interno.
+                 */
                 if (self.previousState === null) {
+
                     self.previousState =
                         currentState;
 
@@ -125,8 +321,9 @@ $(function () {
                     return;
                 }
 
-                // No hacemos nada mientras
-                // no cambie el estado.
+                /*
+                 * Nada cambió.
+                 */
                 if (
                     currentState ===
                     self.previousState
@@ -148,11 +345,8 @@ $(function () {
                 self.previousState =
                     currentState;
 
-                setTimeout(
-                    function () {
-                        self.refreshWebcam();
-                    },
-                    self.transitionDelay
+                self.applyState(
+                    currentState
                 );
             })
             .fail(function () {
@@ -167,7 +361,15 @@ $(function () {
             });
         };
 
+
+        /*
+         * ------------------------------------------------------
+         * Polling
+         * ------------------------------------------------------
+         */
+
         self.startPolling = function () {
+
             if (self.timer) {
                 clearInterval(
                     self.timer
@@ -176,25 +378,48 @@ $(function () {
 
             self.checkWebcam();
 
-            self.timer = setInterval(
-                self.checkWebcam,
-                self.pollInterval
-            );
+            self.timer =
+                setInterval(
+                    self.checkWebcam,
+                    self.pollInterval
+                );
 
             self.log(
-                "Polling started"
+                "Polling started every",
+                self.pollInterval,
+                "ms"
             );
         };
 
-        self.onAllBound = function () {
-            self.loadPluginSettings();
 
-            setTimeout(
-                self.startPolling,
-                1500
-            );
-        };
+        /*
+         * ------------------------------------------------------
+         * OctoPrint lifecycle
+         * ------------------------------------------------------
+         */
+
+        self.onAllBound =
+            function (allViewModels) {
+
+                self.loadPluginSettings();
+
+                self.findClassicWebcamViewModel(
+                    allViewModels
+                );
+
+                if (
+                    !self.classicWebcamViewModel
+                ) {
+                    return;
+                }
+
+                setTimeout(
+                    self.startPolling,
+                    1500
+                );
+            };
     }
+
 
     OCTOPRINT_VIEWMODELS.push({
         construct:
@@ -202,10 +427,6 @@ $(function () {
 
         dependencies: [
             "settingsViewModel"
-        ],
-
-        optional: [
-            "classicWebcamViewModel"
         ],
 
         elements: []
