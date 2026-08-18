@@ -3,38 +3,39 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.4.0
+## Version 0.4.1
 
-Major robustness and configurability update.
+Health-check and logging polish release.
 
-> **Development note:** this release expands the stable v0.3.3 behavior with dynamic webcam configuration discovery, configurable health checks, transient-failure protection, runtime settings reload, and OctoPrint connection lifecycle handling.
+> **Development note:** this release refines the robust webcam health-check logic introduced in v0.4.0 by cleaning up failure-counter behavior and improving recovery logging.
 
 ### Status
 
-Working robustness release.
+Stable robustness release.
 
-### Added in v0.4.0
+### Fixed in v0.4.1
+
+- Stops incrementing the consecutive-failure counter once the webcam is already known to be OFF.
+- Prevents repeated logs such as `3 / 2`, `4 / 2`, and higher while the webcam remains offline.
+- Caps the failure counter at the configured threshold.
+- Adds a recovery log when a transient health-check failure is followed by a successful check.
+- Preserves the failure-threshold protection introduced in v0.4.0.
+
+
+### Retained from v0.4.0
 
 - Dynamic Classic Webcam snapshot URL discovery.
 - Dynamic Classic Webcam stream URL discovery.
+- Configurable **Poll interval**.
+- Configurable **Transition delay**.
 - Configurable **Health check timeout**.
 - Configurable **Failure threshold**.
 - Optional **Initial synchronization**.
 - Optional **Debug logging**.
 - Runtime settings reload without restarting OctoPrint.
-- Polling stop/restart handling when OctoPrint disconnects and reconnects.
-- Consecutive-failure protection to avoid treating a single failed request as webcam OFF.
-
-
-### Retained from v0.3.3
-
-- Correct discovery of `ClassicWebcamViewModel`.
+- OctoPrint disconnect/reconnect lifecycle handling.
 - Automatic webcam ON/OFF synchronization.
-- Automatic MJPEG stream reconnection.
-- Configurable **Poll interval**.
-- Configurable **Transition delay**.
 - No full-page OctoPrint reload.
-- Normal Classic Webcam layout while offline.
 
 
 ### Behavior
@@ -91,7 +92,7 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.4.0 extends the working Classic Webcam integration from v0.3.3 with dynamic configuration discovery and more robust webcam health checking.
+Version 0.4.1 keeps the robust health-check architecture introduced in v0.4.0 and refines how failed and recovered checks are handled.
 
 Conceptually:
 
@@ -137,7 +138,11 @@ A successful snapshot request immediately confirms that the webcam is online.
 
 A failed request increments the consecutive-failure counter. The webcam is only considered offline after the configured failure threshold is reached.
 
-This prevents a single transient request failure from incorrectly switching the webcam UI to OFF.
+If a health check succeeds before the threshold is reached, the failure counter is reset and a recovery message is logged when debug logging is enabled.
+
+Once the webcam is considered OFF, additional failed checks no longer increase or repeatedly log the failure counter.
+
+This prevents transient request failures from incorrectly switching the webcam UI to OFF while also avoiding unnecessary log spam during extended offline periods.
 
 
 ### OctoPrint connection lifecycle
@@ -223,6 +228,11 @@ Typical output:
 ...
 
 [Webcam Auto Refresh] Health check failure 1 / 2
+[Webcam Auto Refresh] Health check recovered - failure counter reset
+
+...
+
+[Webcam Auto Refresh] Health check failure 1 / 2
 [Webcam Auto Refresh] Health check failure 2 / 2
 [Webcam Auto Refresh] State changed: ON -> OFF
 [Webcam Auto Refresh] UI -> OFF
@@ -290,7 +300,7 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.4.0)
+Webcam Auto Refresh (0.4.1)
 ```
 
 
@@ -299,7 +309,6 @@ Webcam Auto Refresh (0.4.0)
 - Single-camera design.
 - Direct DOM manipulation depends on the Classic Webcam HTML structure.
 - Health checking depends on a working Classic Webcam snapshot endpoint.
-- The failure counter continues to increment/log after the webcam is already OFF; this logging behavior will be refined in v0.4.1.
 
 
 ## License

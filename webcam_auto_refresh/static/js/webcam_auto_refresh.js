@@ -464,106 +464,129 @@ $(function () {
          * ------------------------------------------------------
          */
 
-        self.processHealthResult =
-            function (healthy) {
+        self.processHealthResult = function (healthy) {
 
-                let detectedState = null;
+            let detectedState = null;
 
+
+            /*
+            * Successful health check.
+            */
+            if (healthy) {
 
                 /*
-                 * A successful request immediately proves
-                 * that the webcam is online.
-                 */
-                if (healthy) {
-
-                    self.consecutiveFailures = 0;
-                    detectedState = true;
-
-                } else {
-
-                    self.consecutiveFailures += 1;
-
+                * If we had previous failures, log the recovery once
+                * before resetting the counter.
+                */
+                if (self.consecutiveFailures > 0) {
                     self.log(
-                        "Health check failure",
-                        self.consecutiveFailures,
-                        "/",
-                        self.failureThreshold
+                        "Health check recovered - failure counter reset"
                     );
-
-                    /*
-                     * Do not declare OFF until enough
-                     * consecutive failures occur.
-                     */
-                    if (
-                        self.consecutiveFailures <
-                        self.failureThreshold
-                    ) {
-                        return;
-                    }
-
-                    detectedState = false;
                 }
 
+                self.consecutiveFailures = 0;
+                detectedState = true;
+
+            } else {
 
                 /*
-                 * First usable state.
-                 */
-                if (self.previousState === null) {
-
-                    self.previousState =
-                        detectedState;
-
-                    self.log(
-                        "Initial state:",
-                        detectedState
-                            ? "ON"
-                            : "OFF"
-                    );
-
-
-                    if (
-                        self.syncInitialState
-                    ) {
-                        self.applyState(
-                            detectedState
-                        );
-                    }
-
+                * If the webcam is already known to be OFF,
+                * there is no value in continuing to increment
+                * or log the failure counter.
+                */
+                if (self.previousState === false) {
                     return;
                 }
 
+                self.consecutiveFailures += 1;
 
                 /*
-                 * No transition.
-                 */
+                * Clamp the counter at the configured threshold.
+                */
+                self.consecutiveFailures =
+                    Math.min(
+                        self.consecutiveFailures,
+                        self.failureThreshold
+                    );
+
+                self.log(
+                    "Health check failure",
+                    self.consecutiveFailures,
+                    "/",
+                    self.failureThreshold
+                );
+
+                /*
+                * Do not declare OFF until enough consecutive
+                * failures have occurred.
+                */
                 if (
-                    detectedState ===
-                    self.previousState
+                    self.consecutiveFailures <
+                    self.failureThreshold
                 ) {
                     return;
                 }
 
+                detectedState = false;
+            }
+
+
+            /*
+            * First usable state.
+            */
+            if (self.previousState === null) {
+
+                self.previousState =
+                    detectedState;
 
                 self.log(
-                    "State changed:",
-                    self.previousState
-                        ? "ON"
-                        : "OFF",
-                    "->",
+                    "Initial state:",
                     detectedState
                         ? "ON"
                         : "OFF"
                 );
 
+                if (self.syncInitialState) {
+                    self.applyState(
+                        detectedState
+                    );
+                }
 
-                self.previousState =
-                    detectedState;
+                return;
+            }
 
 
-                self.applyState(
-                    detectedState
-                );
-            };
+            /*
+            * No state transition.
+            */
+            if (
+                detectedState ===
+                self.previousState
+            ) {
+                return;
+            }
+
+
+            self.log(
+                "State changed:",
+                self.previousState
+                    ? "ON"
+                    : "OFF",
+                "->",
+                detectedState
+                    ? "ON"
+                    : "OFF"
+            );
+
+
+            self.previousState =
+                detectedState;
+
+
+            self.applyState(
+                detectedState
+            );
+        };
 
 
         /*

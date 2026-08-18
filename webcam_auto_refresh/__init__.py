@@ -32,7 +32,7 @@ class WebcamAutoRefreshPlugin(
 
 
 __plugin_name__ = "Webcam Auto Refresh"
-__plugin_version__ = "0.4.0"
+__plugin_version__ = "0.4.1"
 __plugin_description__ = (
     "Automatically keeps the Classic Webcam view synchronized "
     "with the real state of the webcam stream."
