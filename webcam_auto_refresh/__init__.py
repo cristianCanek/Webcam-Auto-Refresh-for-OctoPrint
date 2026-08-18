@@ -28,10 +28,10 @@ class WebcamAutoRefreshPlugin(
 
 
 __plugin_name__ = "Webcam Auto Refresh"
-__plugin_version__ = "0.3.0"
+__plugin_version__ = "0.3.1"
 __plugin_description__ = (
-    "Automatically updates the webcam view when the stream "
-    "changes state without reloading OctoPrint."
+    "Automatically refreshes Classic Webcam when "
+    "the webcam stream changes state."
 )
 __plugin_pythoncompat__ = ">=3.10,<4"
 

@@ -1,299 +1,213 @@
 $(function () {
     "use strict";
 
-    let previousState = null;
-    let requestInProgress = false;
-    let timer = null;
+    function WebcamAutoRefreshViewModel(parameters) {
+        const self = this;
 
-    let snapshotUrl = null;
-    let streamUrl = null;
+        self.settingsViewModel = parameters[0];
+        self.classicWebcamViewModel = parameters[1];
 
-    let pollInterval = 2000;
-    let transitionDelay = 500;
+        self.previousState = null;
+        self.requestInProgress = false;
+        self.timer = null;
 
-    function log() {
-        console.log(
-            "[Webcam Auto Refresh]",
-            ...arguments
-        );
-    }
+        self.pollInterval = 2000;
+        self.transitionDelay = 500;
 
-    function getWebcamImage() {
-        let image = $("#webcam_image");
+        // La URL de snapshot permanece estable en nuestra
+        // instalación y se usa únicamente como health check.
+        self.snapshotUrl =
+            "http://localhost:8080/?action=snapshot";
 
-        if (!image.length) {
-            image = $('img[src*="action=stream"]').first();
-        }
-
-        return image;
-    }
-
-    function getContainer(image) {
-        if (!image || !image.length) {
-            return null;
-        }
-
-        return image.parent();
-    }
-
-    function removeStatus(container) {
-        if (!container || !container.length) {
-            return;
-        }
-
-        container
-            .find(".webcam-auto-refresh-status")
-            .remove();
-    }
-
-    function showStatus(text) {
-        const image = getWebcamImage();
-
-        if (!image || !image.length) {
-            log("Webcam image element not found");
-            return;
-        }
-
-        const container = getContainer(image);
-
-        removeStatus(container);
-
-        image.attr("src", "");
-        image.hide();
-
-        container.append(
-            '<div class="webcam-auto-refresh-status" ' +
-            'style="' +
-            'display:flex;' +
-            'align-items:center;' +
-            'justify-content:center;' +
-            'min-height:200px;' +
-            'background:#111;' +
-            'color:#fff;' +
-            'font-weight:bold;' +
-            'text-align:center;' +
-            '">' +
-            text +
-            "</div>"
-        );
-    }
-
-    function showOfflineState() {
-        showStatus("Webcam offline");
-        log("UI -> OFF");
-    }
-
-    function showStartingState() {
-        showStatus("Starting webcam...");
-        log("UI -> STARTING");
-    }
-
-    function showOnlineState() {
-        const image = getWebcamImage();
-
-        if (!image || !image.length) {
-            log("Webcam image element not found");
-            return;
-        }
-
-        const container = getContainer(image);
-
-        removeStatus(container);
-
-        const separator =
-            streamUrl.includes("?") ? "&" : "?";
-
-        const url =
-            streamUrl +
-            separator +
-            "_=" +
-            Date.now();
-
-        image.attr("src", url);
-        image.show();
-
-        log("UI -> ON");
-    }
-
-    function applyState(isOnline) {
-        if (isOnline) {
-            showStartingState();
-
-            setTimeout(function () {
-                showOnlineState();
-            }, transitionDelay);
-
-        } else {
-            showOfflineState();
-        }
-    }
-
-    function checkWebcam() {
-        if (
-            requestInProgress ||
-            !snapshotUrl
-        ) {
-            return;
-        }
-
-        requestInProgress = true;
-
-        OctoPrint.util.testUrl(
-            snapshotUrl,
-            {
-                method: "GET"
-            }
-        )
-        .done(function (response) {
-            const currentState =
-                response.result === true;
-
-            if (previousState === null) {
-                previousState = currentState;
-
-                log(
-                    "Initial state:",
-                    currentState ?
-                        "ON" :
-                        "OFF"
-                );
-
-                applyState(currentState);
-                return;
-            }
-
-            if (
-                currentState !== previousState
-            ) {
-                log(
-                    "State changed:",
-                    previousState ?
-                        "ON" :
-                        "OFF",
-                    "->",
-                    currentState ?
-                        "ON" :
-                        "OFF"
-                );
-
-                previousState =
-                    currentState;
-
-                applyState(currentState);
-            }
-        })
-        .fail(function () {
-            log(
-                "Webcam status check failed"
+        self.log = function () {
+            console.log(
+                "[Webcam Auto Refresh]",
+                ...arguments
             );
-        })
-        .always(function () {
-            requestInProgress = false;
-        });
-    }
+        };
 
-    function startPolling() {
-        if (timer) {
-            clearInterval(timer);
-        }
+        self.loadPluginSettings = function () {
+            try {
+                const settings =
+                    self.settingsViewModel.settings;
 
-        checkWebcam();
-
-        timer = setInterval(
-            checkWebcam,
-            pollInterval
-        );
-
-        log(
-            "Polling every",
-            pollInterval,
-            "ms"
-        );
-    }
-
-    function loadConfiguration() {
-        OctoPrint.settings
-            .get()
-            .done(function (settings) {
-
-                if (
-                    settings.webcam &&
-                    settings.webcam.snapshot
-                ) {
-                    snapshotUrl =
-                        settings.webcam.snapshot;
-                }
-
-                if (
-                    settings.webcam &&
-                    settings.webcam.stream
-                ) {
-                    streamUrl =
-                        settings.webcam.stream;
-                }
-
-                const pluginSettings =
-                    settings.plugins &&
+                const plugin =
                     settings.plugins
                         .webcam_auto_refresh;
 
-                if (pluginSettings) {
+                self.pollInterval =
+                    parseInt(
+                        plugin.pollInterval(),
+                        10
+                    ) || 2000;
 
-                    pollInterval =
-                        parseInt(
-                            pluginSettings
-                                .pollInterval,
-                            10
-                        ) || 2000;
+                self.transitionDelay =
+                    parseInt(
+                        plugin.transitionDelay(),
+                        10
+                    ) || 500;
 
-                    transitionDelay =
-                        parseInt(
-                            pluginSettings
-                                .transitionDelay,
-                            10
-                        ) || 500;
+            } catch (error) {
+                console.warn(
+                    "[Webcam Auto Refresh] " +
+                    "Could not read plugin settings, " +
+                    "using defaults.",
+                    error
+                );
+            }
+
+            self.log(
+                "Poll interval:",
+                self.pollInterval,
+                "ms"
+            );
+
+            self.log(
+                "Transition delay:",
+                self.transitionDelay,
+                "ms"
+            );
+        };
+
+        self.refreshWebcam = function () {
+            self.log(
+                "Refreshing Classic Webcam"
+            );
+
+            if (
+                self.classicWebcamViewModel &&
+                typeof self.classicWebcamViewModel
+                    .onWebcamRefresh === "function"
+            ) {
+                self.classicWebcamViewModel
+                    .onWebcamRefresh();
+
+                return;
+            }
+
+            console.warn(
+                "[Webcam Auto Refresh] " +
+                "Classic Webcam refresh function " +
+                "not available"
+            );
+        };
+
+        self.checkWebcam = function () {
+            if (self.requestInProgress) {
+                return;
+            }
+
+            self.requestInProgress = true;
+
+            OctoPrint.util.testUrl(
+                self.snapshotUrl,
+                {
+                    method: "GET"
                 }
+            )
+            .done(function (response) {
+                const currentState =
+                    response.result === true;
 
-                log(
-                    "Snapshot URL:",
-                    snapshotUrl
-                );
+                // Primera lectura:
+                // sólo memorizar estado.
+                if (self.previousState === null) {
+                    self.previousState =
+                        currentState;
 
-                log(
-                    "Stream URL:",
-                    streamUrl
-                );
-
-                log(
-                    "Transition delay:",
-                    transitionDelay,
-                    "ms"
-                );
-
-                if (
-                    !snapshotUrl ||
-                    !streamUrl
-                ) {
-                    console.warn(
-                        "[Webcam Auto Refresh] " +
-                        "Webcam URLs unavailable"
+                    self.log(
+                        "Initial state:",
+                        currentState
+                            ? "ON"
+                            : "OFF"
                     );
 
                     return;
                 }
 
-                startPolling();
+                // No hacemos nada mientras
+                // no cambie el estado.
+                if (
+                    currentState ===
+                    self.previousState
+                ) {
+                    return;
+                }
+
+                self.log(
+                    "State changed:",
+                    self.previousState
+                        ? "ON"
+                        : "OFF",
+                    "->",
+                    currentState
+                        ? "ON"
+                        : "OFF"
+                );
+
+                self.previousState =
+                    currentState;
+
+                setTimeout(
+                    function () {
+                        self.refreshWebcam();
+                    },
+                    self.transitionDelay
+                );
             })
             .fail(function () {
-                console.error(
+                console.warn(
                     "[Webcam Auto Refresh] " +
-                    "Could not load OctoPrint settings"
+                    "Health check request failed"
                 );
+            })
+            .always(function () {
+                self.requestInProgress =
+                    false;
             });
+        };
+
+        self.startPolling = function () {
+            if (self.timer) {
+                clearInterval(
+                    self.timer
+                );
+            }
+
+            self.checkWebcam();
+
+            self.timer = setInterval(
+                self.checkWebcam,
+                self.pollInterval
+            );
+
+            self.log(
+                "Polling started"
+            );
+        };
+
+        self.onAllBound = function () {
+            self.loadPluginSettings();
+
+            setTimeout(
+                self.startPolling,
+                1500
+            );
+        };
     }
 
-    setTimeout(
-        loadConfiguration,
-        1500
-    );
+    OCTOPRINT_VIEWMODELS.push({
+        construct:
+            WebcamAutoRefreshViewModel,
+
+        dependencies: [
+            "settingsViewModel"
+        ],
+
+        optional: [
+            "classicWebcamViewModel"
+        ],
+
+        elements: []
+    });
 });

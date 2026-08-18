@@ -3,48 +3,48 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.3.0
+## Version 0.3.1
 
-Experimental configuration release.
+Second experimental attempt at integrating directly with Classic Webcam.
 
-> **Development note:** this version introduced a regression in the original test environment.
+> **Development note:** this version was not functional in the original test environment.
+
 
 ### Status
 
 Experimental / known broken.
 
-### Added in v0.3.0
 
+### Changed in v0.3.1
+
+- Reworked the webcam refresh strategy to use Classic Webcam's native ViewModel.
+- Attempted to call Classic Webcam's own refresh handler instead of manually rebuilding the stream.
+- Kept the configurable poll interval and transition delay introduced in v0.3.0.
+
+
+### Retained from previous versions
+
+- Automatic webcam ON/OFF state detection.
+- Snapshot-based health checking.
 - OctoPrint Settings page.
 - Configurable **Poll interval**.
 - Configurable **Transition delay**.
-- Attempted automatic discovery of snapshot and stream URLs.
-- `Offline`, `Starting webcam...`, and `Online` UI states.
 
-### Retained from v0.2.0
-
-- Direct webcam DOM updates.
-- Automatic ON/OFF state detection.
-- Stale MJPEG image removal.
-- Automatic MJPEG stream reconnection.
 
 ### Known issue
 
-The attempted webcam URL discovery did not match the way Classic Webcam exposed its configuration in the tested OctoPrint version.
-
-As a result, automatic webcam state detection and UI synchronization did not work correctly in this release.
+The Classic Webcam ViewModel dependency was not obtained in the way expected by this implementation, so automatic UI refresh still did not work.
 
 
 ### Intended behavior
 
-- Periodically checks the configured webcam snapshot endpoint.
+- Periodically checks whether the webcam is available.
 - Detects webcam **ON/OFF** transitions.
-- Updates only the webcam DOM when the state changes.
-- Hides the stale MJPEG image when the webcam goes offline.
-- Reconnects the MJPEG stream automatically when the webcam comes back online.
-- Allows the polling interval and transition delay to be configured from OctoPrint Settings.
+- Uses Classic Webcam's own ViewModel refresh method when the state changes.
+- Avoids reloading the complete OctoPrint page.
+- Keeps polling interval and transition delay configurable from OctoPrint Settings.
 
-> Due to a regression in webcam URL discovery, this behavior did not work correctly in the original test environment.
+> The Classic Webcam ViewModel dependency was not resolved correctly in the original test environment, so the automatic refresh path did not work.
 
 
 ### Configuration
@@ -63,7 +63,7 @@ Delay:              500 ms
 
 *The defaults are recommended for most local-network installations.*
 
-This version also attempted to obtain the webcam snapshot and stream URLs dynamically from OctoPrint instead of relying on the hardcoded URLs used by previous versions.
+This version shifted focus from direct stream reconstruction to integrating with Classic Webcam's own refresh logic through its ViewModel.
 
 
 ## Why?
@@ -77,21 +77,17 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.3.0 attempts to obtain the webcam snapshot and stream URLs from OctoPrint's configuration and periodically checks the resulting snapshot endpoint using OctoPrint's URL testing API.
+Version 0.3.1 changes the refresh strategy introduced in v0.3.0.
+
+Instead of rebuilding the webcam stream directly, it attempts to obtain the Classic Webcam ViewModel and invoke its native refresh handler whenever the detected webcam state changes.
 
 Conceptually:
 
 ```text
-OctoPrint webcam configuration
-          │
-          ▼
-Discover snapshot / stream URLs
-          │
-          ▼
 Periodic snapshot health check
           │
           ▼
-Is snapshot available?
+Is webcam available?
           │
      ┌────┴────┐
      │         │
@@ -106,10 +102,13 @@ Is snapshot available?
          YES
           │
           ▼
-   Update webcam DOM
+Find Classic Webcam ViewModel
+          │
+          ▼
+Call native webcam refresh
 ```
 
-The URL-discovery step did not work correctly with the Classic Webcam configuration exposed by the tested OctoPrint version, which caused this release to regress.
+The ViewModel dependency was not obtained correctly in the original test environment, so the final refresh step did not execute as intended.
 
 
 ## Example use case
@@ -133,10 +132,10 @@ Webcam Auto Refresh
           │
           └── Detects webcam state
                     │
-                    └── Updates webcam DOM
+                    └── Requests Classic Webcam refresh
 ```
 
-*In v0.3.0, the URL-discovery regression prevented this flow from working reliably in the original test environment.*
+*In v0.3.1, the Classic Webcam ViewModel dependency was not resolved correctly, so this refresh path was not functional in the original test environment.*
 
 The plugin does not need to know how the webcam was turned on or off; it only observes its state.
 
@@ -157,9 +156,9 @@ and:
 s6-svc -d /run/s6/services/mjpg-streamer
 ```
 
-The intended behavior is to detect the resulting state change and update the webcam view automatically without reloading the rest of OctoPrint.
+The intended behavior is to detect the resulting state change and ask Classic Webcam to refresh its own view without reloading the rest of OctoPrint.
 
-Due to the URL-discovery regression in v0.3.0, this did not work reliably in the original test environment.
+Because the Classic Webcam ViewModel dependency was not resolved correctly in v0.3.1, this did not work in the original test environment.
 
 The design is intended to support integration with OctoPrint System Commands, power-control plugins, smart plugs, or other automation systems.
 
@@ -178,7 +177,9 @@ and filter for:
 Webcam Auto Refresh
 ```
 
-This release may report missing or unavailable webcam URLs because its URL-discovery implementation was not compatible with the Classic Webcam configuration used in the original test environment.
+The main failure mode in this version is that the Classic Webcam ViewModel is not available through the dependency mechanism expected by this implementation.
+
+As a result, the plugin can detect state changes but cannot reliably trigger Classic Webcam's native refresh behavior.
 
 
 ## Requirements
@@ -242,17 +243,17 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.3.0)
+Webcam Auto Refresh (0.3.1)
 ```
 
 
 ## Limitations
 
-- Webcam URL discovery is experimental and does not work correctly with the Classic Webcam configuration used in the original test environment.
-- Automatic webcam state synchronization is therefore unreliable in this release.
+- Classic Webcam ViewModel dependency resolution does not work correctly in the original test environment.
+- Automatic webcam UI refresh is therefore non-functional in this release.
+- Snapshot health checking still depends on the expected webcam endpoint.
 - No transient-failure protection.
 - Single-camera design.
-- Direct DOM manipulation depends on the Classic Webcam HTML structure.
 - Only polling interval and transition delay are configurable.
 
 
