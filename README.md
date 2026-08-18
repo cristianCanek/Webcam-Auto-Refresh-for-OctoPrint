@@ -3,34 +3,38 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.3.3
+## Version 0.4.0
 
-Polished stable version of the 0.3.x branch.
+Major robustness and configurability update.
 
-> **Development note:** this version fixes the offline layout issue introduced in v0.3.2 while preserving the working Classic Webcam ViewModel integration.
+> **Development note:** this release expands the stable v0.3.3 behavior with dynamic webcam configuration discovery, configurable health checks, transient-failure protection, runtime settings reload, and OctoPrint connection lifecycle handling.
 
 ### Status
 
-Stable 0.3.x version.
+Working robustness release.
 
-### Fixed in v0.3.3
+### Added in v0.4.0
 
-- Removes the custom offline status panel introduced in v0.3.2.
-- Prevents the Classic Webcam section from becoming unnecessarily tall while the webcam is OFF.
-- Preserves automatic webcam ON/OFF synchronization without reloading the full OctoPrint page.
+- Dynamic Classic Webcam snapshot URL discovery.
+- Dynamic Classic Webcam stream URL discovery.
+- Configurable **Health check timeout**.
+- Configurable **Failure threshold**.
+- Optional **Initial synchronization**.
+- Optional **Debug logging**.
+- Runtime settings reload without restarting OctoPrint.
+- Polling stop/restart handling when OctoPrint disconnects and reconnects.
+- Consecutive-failure protection to avoid treating a single failed request as webcam OFF.
 
 
-### Retained from previous versions
+### Retained from v0.3.3
 
-- Snapshot-based webcam health checking.
 - Correct discovery of `ClassicWebcamViewModel`.
-- Dynamic retrieval of the configured MJPEG stream URL.
 - Automatic webcam ON/OFF synchronization.
-- Automatic stream reconnection.
-- OctoPrint Settings page.
+- Automatic MJPEG stream reconnection.
 - Configurable **Poll interval**.
 - Configurable **Transition delay**.
 - No full-page OctoPrint reload.
+- Normal Classic Webcam layout while offline.
 
 
 ### Behavior
@@ -41,7 +45,7 @@ Stable 0.3.x version.
 - Retrieves the configured stream URL from Classic Webcam.
 - Clears and hides the MJPEG image when the webcam goes offline.
 - Rebuilds the MJPEG stream connection when the webcam comes back online.
-- Keeps polling interval and transition delay configurable from OctoPrint Settings.
+- Keeps polling, transition timing, health-check behavior, initial synchronization, and debug logging configurable from OctoPrint Settings.
 
 
 ### Configuration
@@ -49,18 +53,31 @@ Stable 0.3.x version.
 Open: **Settings → Webcam Auto Refresh**
 
 Current options:
-- **Poll interval**: How often the plugin checks whether the webcam is available.
-- **Transition delay**: Delay between detecting an ON/OFF transition and updating the webcam UI.
 
-Default values:
+- **Poll interval**: How often the webcam health check runs.
+- **Transition delay**: Delay before updating the webcam UI after a detected state change.
+- **Health check timeout**: Maximum time to wait for the snapshot endpoint.
+- **Failure threshold**: Number of consecutive failed checks required before considering the webcam offline.
+- **Initial synchronization**: Synchronize the webcam UI with the detected state when OctoPrint loads.
+- **Debug logging**: Enable detailed browser-console logging.
+
+Recommended defaults:
+
 ```text
-Polling:           2000 ms
-Delay:              500 ms
+Poll interval:           2000 ms
+Transition delay:        500 ms
+Health check timeout:    1.5 s
+Failure threshold:       2
+Initial synchronization: ON
+Debug logging:           OFF
 ```
 
-*The defaults are recommended for most local-network installations.*
 
-This version discovers the actual Classic Webcam ViewModel after OctoPrint finishes binding its ViewModels and uses it to obtain the configured MJPEG stream URL.
+### Runtime settings
+
+Changes made in **Settings → Webcam Auto Refresh** are applied when the Settings dialog closes.
+
+The plugin stops the current polling loop, reloads the configured values, and starts polling again without requiring an OctoPrint restart.
 
 
 ## Why?
@@ -74,9 +91,7 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.3.3 keeps the ViewModel integration introduced in v0.3.2 and fixes the offline layout behavior.
-
-Instead of expecting Classic Webcam to be available as a direct dependency, the plugin waits until OctoPrint has finished binding its ViewModels and searches the complete ViewModel list for `ClassicWebcamViewModel`.
+Version 0.4.0 extends the working Classic Webcam integration from v0.3.3 with dynamic configuration discovery and more robust webcam health checking.
 
 Conceptually:
 
@@ -84,23 +99,33 @@ Conceptually:
 OctoPrint ViewModels finish binding
           │
           ▼
-Find ClassicWebcamViewModel
+Discover Classic Webcam ViewModels
+          │
+          ├── Snapshot URL
+          └── Stream URL
           │
           ▼
-Start periodic snapshot health checks
+Start periodic health checks
           │
           ▼
-Is webcam available?
+Snapshot request succeeds?
           │
      ┌────┴────┐
      │         │
     YES       NO
      │         │
-     ON       OFF
+ Reset      Failure
+ counter     counter +1
+     │         │
+     │   Threshold reached?
      │         │
      └────┬────┘
           │
-    Did state change?
+          ▼
+Determine webcam state
+          │
+          ▼
+Did state change?
           │
          YES
           │
@@ -108,15 +133,18 @@ Is webcam available?
 Update Classic Webcam DOM
 ```
 
-When the webcam comes online, the stream URL is obtained from `ClassicWebcamViewModel` and assigned to the webcam image element.
+A successful snapshot request immediately confirms that the webcam is online.
 
-When the webcam goes offline, the MJPEG image is cleared and hidden.
+A failed request increments the consecutive-failure counter. The webcam is only considered offline after the configured failure threshold is reached.
 
-This preserves automatic webcam synchronization without reloading the full OctoPrint page.
+This prevents a single transient request failure from incorrectly switching the webcam UI to OFF.
 
-Unlike v0.3.2, this version does not create an additional offline status panel.
 
-When the webcam goes offline, the MJPEG image is simply cleared and hidden, allowing Classic Webcam to retain its normal layout.
+### OctoPrint connection lifecycle
+
+When the OctoPrint server connection is lost, webcam polling is stopped.
+
+When the connection is restored, the plugin resets its detected state and restarts polling using the current runtime settings.
 
 
 ## Example use case
@@ -184,13 +212,18 @@ Webcam Auto Refresh
 Typical output:
 
 ```text
+[Webcam Auto Refresh] Classic Webcam viewmodels discovered
+[Webcam Auto Refresh] Runtime settings loaded
 [Webcam Auto Refresh] Poll interval: 2000 ms
 [Webcam Auto Refresh] Transition delay: 500 ms
-[Webcam Auto Refresh] ClassicWebcamViewModel found
+[Webcam Auto Refresh] Request timeout: 1.5 s
+[Webcam Auto Refresh] Failure threshold: 2
 [Webcam Auto Refresh] Polling started every 2000 ms
-[Webcam Auto Refresh] Initial state: OFF
-[Webcam Auto Refresh] State changed: OFF -> ON
-[Webcam Auto Refresh] UI -> ON /webcam/?action=stream
+
+...
+
+[Webcam Auto Refresh] Health check failure 1 / 2
+[Webcam Auto Refresh] Health check failure 2 / 2
 [Webcam Auto Refresh] State changed: ON -> OFF
 [Webcam Auto Refresh] UI -> OFF
 ```
@@ -257,17 +290,16 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.3.3)
+Webcam Auto Refresh (0.4.0)
 ```
 
 
 ## Limitations
 
-- Snapshot health checking still depends on the expected webcam endpoint.
-- No transient-failure protection.
 - Single-camera design.
 - Direct DOM manipulation depends on the Classic Webcam HTML structure.
-- Only polling interval and transition delay are configurable.
+- Health checking depends on a working Classic Webcam snapshot endpoint.
+- The failure counter continues to increment/log after the webcam is already OFF; this logging behavior will be refined in v0.4.1.
 
 
 ## License

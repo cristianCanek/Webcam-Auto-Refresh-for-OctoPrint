@@ -26,6 +26,7 @@
         </div>
     </div>
 
+
     <div class="control-group">
         <label class="control-label">
             Transition delay
@@ -49,6 +50,99 @@
                 Delay before updating the webcam UI after
                 an ON/OFF transition.
             </span>
+        </div>
+    </div>
+
+
+    <div class="control-group">
+        <label class="control-label">
+            Health check timeout
+        </label>
+
+        <div class="controls">
+            <div class="input-append">
+                <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    data-bind="
+                        value:
+                        settings.plugins.webcam_auto_refresh.requestTimeout
+                    "
+                >
+                <span class="add-on">s</span>
+            </div>
+
+            <span class="help-block">
+                Maximum time to wait for the webcam snapshot endpoint.
+                Recommended: 1.5 s.
+            </span>
+        </div>
+    </div>
+
+
+    <div class="control-group">
+        <label class="control-label">
+            Failure threshold
+        </label>
+
+        <div class="controls">
+            <input
+                type="number"
+                min="1"
+                step="1"
+                data-bind="
+                    value:
+                    settings.plugins.webcam_auto_refresh.failureThreshold
+                "
+            >
+
+            <span class="help-block">
+                Number of consecutive failed health checks required
+                before considering the webcam offline.
+                Recommended: 2.
+            </span>
+        </div>
+    </div>
+
+
+    <div class="control-group">
+        <label class="control-label">
+            Initial synchronization
+        </label>
+
+        <div class="controls">
+            <label class="checkbox">
+                <input
+                    type="checkbox"
+                    data-bind="
+                        checked:
+                        settings.plugins.webcam_auto_refresh.syncInitialState
+                    "
+                >
+                Synchronize the webcam UI with the detected state
+                when OctoPrint loads.
+            </label>
+        </div>
+    </div>
+
+
+    <div class="control-group">
+        <label class="control-label">
+            Debug logging
+        </label>
+
+        <div class="controls">
+            <label class="checkbox">
+                <input
+                    type="checkbox"
+                    data-bind="
+                        checked:
+                        settings.plugins.webcam_auto_refresh.debugLogging
+                    "
+                >
+                Write detailed plugin information to the browser console.
+            </label>
         </div>
     </div>
 

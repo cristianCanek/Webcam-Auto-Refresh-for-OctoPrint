@@ -16,6 +16,10 @@ class WebcamAutoRefreshPlugin(
         return {
             "pollInterval": 2000,
             "transitionDelay": 500,
+            "requestTimeout": 1.5,
+            "failureThreshold": 2,
+            "syncInitialState": True,
+            "debugLogging": False,
         }
 
     def get_template_configs(self):
@@ -28,10 +32,10 @@ class WebcamAutoRefreshPlugin(
 
 
 __plugin_name__ = "Webcam Auto Refresh"
-__plugin_version__ = "0.3.3"
+__plugin_version__ = "0.4.0"
 __plugin_description__ = (
-    "Automatically updates the Classic Webcam view "
-    "when the webcam stream changes state."
+    "Automatically keeps the Classic Webcam view synchronized "
+    "with the real state of the webcam stream."
 )
 __plugin_pythoncompat__ = ">=3.10,<4"
 

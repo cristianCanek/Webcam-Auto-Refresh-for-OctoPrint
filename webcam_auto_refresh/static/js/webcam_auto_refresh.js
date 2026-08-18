@@ -7,25 +7,43 @@ $(function () {
         self.settingsViewModel = parameters[0];
 
         self.classicWebcamViewModel = null;
+        self.classicWebcamSettingsViewModel = null;
 
         self.previousState = null;
         self.requestInProgress = false;
+
         self.timer = null;
+
+        self.consecutiveFailures = 0;
 
         self.pollInterval = 2000;
         self.transitionDelay = 500;
+        self.requestTimeout = 1.5;
+        self.failureThreshold = 2;
+        self.syncInitialState = true;
+        self.debugLogging = false;
+
 
         /*
-         * Health check.
-         *
-         * Por ahora dejamos únicamente ESTA URL fija.
-         * En v0.4 la obtendremos del backend/plugin.
+         * ------------------------------------------------------
+         * Logging
+         * ------------------------------------------------------
          */
-        self.snapshotUrl =
-            "http://localhost:8080/?action=snapshot";
 
         self.log = function () {
+            if (!self.debugLogging) {
+                return;
+            }
+
             console.log(
+                "[Webcam Auto Refresh]",
+                ...arguments
+            );
+        };
+
+
+        self.warn = function () {
+            console.warn(
                 "[Webcam Auto Refresh]",
                 ...arguments
             );
@@ -34,38 +52,132 @@ $(function () {
 
         /*
          * ------------------------------------------------------
-         * Settings
+         * Helpers
          * ------------------------------------------------------
          */
 
-        self.loadPluginSettings = function () {
-            try {
-                const plugin =
-                    self.settingsViewModel
-                        .settings
-                        .plugins
-                        .webcam_auto_refresh;
-
-                self.pollInterval =
-                    parseInt(
-                        plugin.pollInterval(),
-                        10
-                    ) || 2000;
-
-                self.transitionDelay =
-                    parseInt(
-                        plugin.transitionDelay(),
-                        10
-                    ) || 500;
-
-            } catch (error) {
-                console.warn(
-                    "[Webcam Auto Refresh] " +
-                    "Could not read plugin settings. " +
-                    "Using defaults.",
-                    error
-                );
+        self.unwrap = function (value) {
+            if (typeof ko !== "undefined") {
+                return ko.unwrap(value);
             }
+
+            if (typeof value === "function") {
+                return value();
+            }
+
+            return value;
+        };
+
+
+        self.getPluginSettings = function () {
+            try {
+                return self
+                    .settingsViewModel
+                    .settings
+                    .plugins
+                    .webcam_auto_refresh;
+            } catch (error) {
+                return null;
+            }
+        };
+
+
+        self.getClassicWebcamSettings = function () {
+            try {
+                return self
+                    .settingsViewModel
+                    .settings
+                    .plugins
+                    .classicwebcam;
+            } catch (error) {
+                return null;
+            }
+        };
+
+
+        /*
+         * ------------------------------------------------------
+         * Runtime settings
+         * ------------------------------------------------------
+         */
+
+        self.loadRuntimeSettings = function () {
+            const plugin =
+                self.getPluginSettings();
+
+            if (!plugin) {
+                self.warn(
+                    "Plugin settings unavailable. " +
+                    "Using defaults."
+                );
+
+                return;
+            }
+
+            self.pollInterval =
+                parseInt(
+                    self.unwrap(plugin.pollInterval),
+                    10
+                ) || 2000;
+
+            self.transitionDelay =
+                parseInt(
+                    self.unwrap(plugin.transitionDelay),
+                    10
+                ) || 500;
+
+            self.requestTimeout =
+                parseFloat(
+                    self.unwrap(plugin.requestTimeout)
+                ) || 1.5;
+
+            self.failureThreshold =
+                parseInt(
+                    self.unwrap(plugin.failureThreshold),
+                    10
+                ) || 2;
+
+            self.syncInitialState =
+                self.unwrap(plugin.syncInitialState)
+                !== false;
+
+            self.debugLogging =
+                self.unwrap(plugin.debugLogging)
+                === true;
+
+
+            /*
+             * Defensive bounds.
+             */
+
+            self.pollInterval =
+                Math.max(
+                    500,
+                    self.pollInterval
+                );
+
+            self.transitionDelay =
+                Math.max(
+                    0,
+                    self.transitionDelay
+                );
+
+            self.requestTimeout =
+                Math.max(
+                    0.5,
+                    self.requestTimeout
+                );
+
+            self.failureThreshold =
+                Math.max(
+                    1,
+                    self.failureThreshold
+                );
+
+
+            self.log(
+                "Runtime settings loaded"
+            );
 
             self.log(
                 "Poll interval:",
@@ -78,6 +190,17 @@ $(function () {
                 self.transitionDelay,
                 "ms"
             );
+
+            self.log(
+                "Request timeout:",
+                self.requestTimeout,
+                "s"
+            );
+
+            self.log(
+                "Failure threshold:",
+                self.failureThreshold
+            );
         };
 
 
@@ -87,37 +210,141 @@ $(function () {
          * ------------------------------------------------------
          */
 
-        self.findClassicWebcamViewModel =
+        self.discoverViewModels =
             function (allViewModels) {
 
                 self.classicWebcamViewModel =
-                    allViewModels.find(function (vm) {
+                    allViewModels.find(
+                        function (vm) {
+                            return (
+                                vm &&
+                                vm.constructor &&
+                                vm.constructor.name ===
+                                    "ClassicWebcamViewModel"
+                            );
+                        }
+                    ) || null;
 
-                        return (
-                            vm &&
-                            vm.constructor &&
-                            vm.constructor.name ===
-                                "ClassicWebcamViewModel"
-                        );
 
-                    }) || null;
+                self.classicWebcamSettingsViewModel =
+                    allViewModels.find(
+                        function (vm) {
+                            return (
+                                vm &&
+                                vm.constructor &&
+                                vm.constructor.name ===
+                                    "ClassicWebcamSettingsViewModel"
+                            );
+                        }
+                    ) || null;
 
-                if (self.classicWebcamViewModel) {
-                    self.log(
-                        "ClassicWebcamViewModel found"
-                    );
-                } else {
-                    console.warn(
-                        "[Webcam Auto Refresh] " +
+
+                if (
+                    !self.classicWebcamViewModel
+                ) {
+                    self.warn(
                         "ClassicWebcamViewModel not found"
                     );
                 }
+
+
+                if (
+                    !self.classicWebcamSettingsViewModel
+                ) {
+                    self.warn(
+                        "ClassicWebcamSettingsViewModel " +
+                        "not found"
+                    );
+                }
+
+
+                self.log(
+                    "Classic Webcam viewmodels discovered"
+                );
             };
 
 
         /*
          * ------------------------------------------------------
-         * DOM helpers
+         * Webcam URLs
+         * ------------------------------------------------------
+         */
+
+        self.getSnapshotUrl = function () {
+
+            /*
+             * Preferred source:
+             * Classic Webcam settings held by OctoPrint.
+             */
+            const settings =
+                self.getClassicWebcamSettings();
+
+            if (
+                settings &&
+                settings.snapshotUrl !== undefined
+            ) {
+                const value =
+                    self.unwrap(
+                        settings.snapshotUrl
+                    );
+
+                if (value) {
+                    return value;
+                }
+            }
+
+
+            /*
+             * Fallback:
+             * ClassicWebcamSettingsViewModel.
+             */
+            try {
+                if (
+                    self.classicWebcamSettingsViewModel &&
+                    self.classicWebcamSettingsViewModel
+                        .snapshotUrl !== undefined
+                ) {
+                    return self.unwrap(
+                        self
+                            .classicWebcamSettingsViewModel
+                            .snapshotUrl
+                    );
+                }
+            } catch (error) {
+                // handled below
+            }
+
+
+            return null;
+        };
+
+
+        self.getStreamUrl = function () {
+            try {
+                if (
+                    self.classicWebcamViewModel &&
+                    self.classicWebcamViewModel
+                        .settings &&
+                    self.classicWebcamViewModel
+                        .settings
+                        .streamUrl
+                ) {
+                    return self
+                        .classicWebcamViewModel
+                        .settings
+                        .streamUrl();
+                }
+            } catch (error) {
+                // handled below
+            }
+
+            return null;
+        };
+
+
+        /*
+         * ------------------------------------------------------
+         * Webcam DOM
          * ------------------------------------------------------
          */
 
@@ -128,7 +355,7 @@ $(function () {
 
         /*
          * ------------------------------------------------------
-         * OFF state
+         * OFF
          * ------------------------------------------------------
          */
 
@@ -136,13 +363,17 @@ $(function () {
             const image =
                 self.getWebcamImage();
 
+            if (!image.length) {
+                self.warn(
+                    "Webcam image element not found"
+                );
+
+                return;
+            }
+
             /*
-            * Cortamos la conexión MJPEG y ocultamos sólo la imagen.
-            * No insertamos ningún elemento adicional en el contenedor.
-            *
-            * Así dejamos que Classic Webcam muestre su propio estado
-            * "Webcam stream not loaded".
-            */
+             * Terminate the active MJPEG connection.
+             */
             image.attr("src", "");
             image.hide();
 
@@ -152,7 +383,7 @@ $(function () {
 
         /*
          * ------------------------------------------------------
-         * ON state
+         * ON
          * ------------------------------------------------------
          */
 
@@ -160,32 +391,28 @@ $(function () {
             const image =
                 self.getWebcamImage();
 
-            let streamUrl = null;
-
-            try {
-                streamUrl =
-                    self.classicWebcamViewModel
-                        .settings
-                        .streamUrl();
-            } catch (error) {
-                console.error(
-                    "[Webcam Auto Refresh] " +
-                    "Could not obtain Classic Webcam stream URL",
-                    error
+            if (!image.length) {
+                self.warn(
+                    "Webcam image element not found"
                 );
 
                 return;
             }
+
+            const streamUrl =
+                self.getStreamUrl();
 
             if (!streamUrl) {
-                console.error(
-                    "[Webcam Auto Refresh] " +
-                    "Classic Webcam stream URL is empty"
+                self.warn(
+                    "Classic Webcam stream URL unavailable"
                 );
 
                 return;
             }
 
+            /*
+             * Explicit cache buster.
+             */
             const separator =
                 streamUrl.includes("?")
                     ? "&"
@@ -213,25 +440,130 @@ $(function () {
 
         /*
          * ------------------------------------------------------
-         * State transition
+         * Apply state
          * ------------------------------------------------------
          */
 
         self.applyState = function (online) {
-
             setTimeout(
                 function () {
-
                     if (online) {
                         self.showOnlineState();
                     } else {
                         self.showOfflineState();
                     }
-
                 },
                 self.transitionDelay
             );
         };
+
+
+        /*
+         * ------------------------------------------------------
+         * State processing
+         * ------------------------------------------------------
+         */
+
+        self.processHealthResult =
+            function (healthy) {
+
+                let detectedState = null;
+
+
+                /*
+                 * A successful request immediately proves
+                 * that the webcam is online.
+                 */
+                if (healthy) {
+
+                    self.consecutiveFailures = 0;
+                    detectedState = true;
+
+                } else {
+
+                    self.consecutiveFailures += 1;
+
+                    self.log(
+                        "Health check failure",
+                        self.consecutiveFailures,
+                        "/",
+                        self.failureThreshold
+                    );
+
+                    /*
+                     * Do not declare OFF until enough
+                     * consecutive failures occur.
+                     */
+                    if (
+                        self.consecutiveFailures <
+                        self.failureThreshold
+                    ) {
+                        return;
+                    }
+
+                    detectedState = false;
+                }
+
+
+                /*
+                 * First usable state.
+                 */
+                if (self.previousState === null) {
+
+                    self.previousState =
+                        detectedState;
+
+                    self.log(
+                        "Initial state:",
+                        detectedState
+                            ? "ON"
+                            : "OFF"
+                    );
+
+
+                    if (
+                        self.syncInitialState
+                    ) {
+                        self.applyState(
+                            detectedState
+                        );
+                    }
+
+                    return;
+                }
+
+
+                /*
+                 * No transition.
+                 */
+                if (
+                    detectedState ===
+                    self.previousState
+                ) {
+                    return;
+                }
+
+
+                self.log(
+                    "State changed:",
+                    self.previousState
+                        ? "ON"
+                        : "OFF",
+                    "->",
+                    detectedState
+                        ? "ON"
+                        : "OFF"
+                );
+
+
+                self.previousState =
+                    detectedState;
+
+
+                self.applyState(
+                    detectedState
+                );
+            };
 
 
         /*
@@ -241,98 +573,98 @@ $(function () {
          */
 
         self.checkWebcam = function () {
-            if (self.requestInProgress) {
+
+            if (
+                self.requestInProgress
+            ) {
                 return;
             }
 
+
+            const snapshotUrl =
+                self.getSnapshotUrl();
+
+
+            if (!snapshotUrl) {
+                self.warn(
+                    "Classic Webcam snapshot URL unavailable"
+                );
+
+                return;
+            }
+
+
             self.requestInProgress = true;
 
+
             OctoPrint.util.testUrl(
-                self.snapshotUrl,
+                snapshotUrl,
                 {
-                    method: "GET"
+                    method: "GET",
+                    timeout:
+                        self.requestTimeout
                 }
             )
             .done(function (response) {
 
-                const currentState =
-                    response.result === true;
-
-                /*
-                 * Primera lectura:
-                 * sólo sincronizamos estado interno.
-                 */
-                if (self.previousState === null) {
-
-                    self.previousState =
-                        currentState;
-
-                    self.log(
-                        "Initial state:",
-                        currentState
-                            ? "ON"
-                            : "OFF"
-                    );
-
-                    return;
-                }
-
-                /*
-                 * Nada cambió.
-                 */
-                if (
-                    currentState ===
-                    self.previousState
-                ) {
-                    return;
-                }
-
-                self.log(
-                    "State changed:",
-                    self.previousState
-                        ? "ON"
-                        : "OFF",
-                    "->",
-                    currentState
-                        ? "ON"
-                        : "OFF"
+                self.processHealthResult(
+                    response.result === true
                 );
 
-                self.previousState =
-                    currentState;
-
-                self.applyState(
-                    currentState
-                );
             })
             .fail(function () {
-                console.warn(
-                    "[Webcam Auto Refresh] " +
-                    "Health check request failed"
+
+                /*
+                 * Failure talking to OctoPrint's test API
+                 * counts as a failed health check too.
+                 */
+                self.processHealthResult(
+                    false
                 );
+
             })
             .always(function () {
+
                 self.requestInProgress =
                     false;
+
             });
         };
 
 
         /*
          * ------------------------------------------------------
-         * Polling
+         * Polling lifecycle
          * ------------------------------------------------------
          */
 
-        self.startPolling = function () {
+        self.stopPolling = function () {
 
             if (self.timer) {
+
                 clearInterval(
                     self.timer
                 );
+
+                self.timer = null;
             }
 
+            self.requestInProgress =
+                false;
+
+            self.log(
+                "Polling stopped"
+            );
+        };
+
+
+        self.startPolling = function () {
+
+            self.stopPolling();
+
+
             self.checkWebcam();
+
 
             self.timer =
                 setInterval(
@@ -340,11 +672,24 @@ $(function () {
                     self.pollInterval
                 );
 
+
             self.log(
                 "Polling started every",
                 self.pollInterval,
                 "ms"
             );
+        };
+
+
+        self.restartPolling = function () {
+
+            self.stopPolling();
+
+            self.loadRuntimeSettings();
+
+            self.consecutiveFailures = 0;
+
+            self.startPolling();
         };
 
 
@@ -357,22 +702,63 @@ $(function () {
         self.onAllBound =
             function (allViewModels) {
 
-                self.loadPluginSettings();
-
-                self.findClassicWebcamViewModel(
+                self.discoverViewModels(
                     allViewModels
                 );
 
-                if (
-                    !self.classicWebcamViewModel
-                ) {
-                    return;
-                }
+                self.loadRuntimeSettings();
+
 
                 setTimeout(
-                    self.startPolling,
+                    function () {
+                        self.startPolling();
+                    },
                     1500
                 );
+            };
+
+
+        /*
+         * Settings dialog closed:
+         * immediately apply new values.
+         */
+        self.onSettingsHidden =
+            function () {
+
+                self.log(
+                    "Settings changed, " +
+                    "restarting polling"
+                );
+
+                self.restartPolling();
+            };
+
+
+        /*
+         * OctoPrint backend disconnected.
+         */
+        self.onServerDisconnect =
+            function () {
+
+                self.stopPolling();
+
+            };
+
+
+        /*
+         * Backend connection restored.
+         */
+        self.onDataUpdaterReconnect =
+            function () {
+
+                self.log(
+                    "OctoPrint connection restored"
+                );
+
+                self.previousState = null;
+                self.consecutiveFailures = 0;
+
+                self.restartPolling();
             };
     }
 
