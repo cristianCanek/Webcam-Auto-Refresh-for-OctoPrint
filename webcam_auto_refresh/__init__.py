@@ -1,18 +1,37 @@
 import octoprint.plugin
 
 
-class WebcamAutoRefreshPlugin(octoprint.plugin.AssetPlugin):
+class WebcamAutoRefreshPlugin(
+    octoprint.plugin.AssetPlugin,
+    octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.TemplatePlugin,
+):
 
     def get_assets(self):
         return {
             "js": ["js/webcam_auto_refresh.js"]
         }
 
+    def get_settings_defaults(self):
+        return {
+            "pollInterval": 2000,
+            "transitionDelay": 500,
+        }
+
+    def get_template_configs(self):
+        return [
+            {
+                "type": "settings",
+                "custom_bindings": False,
+            }
+        ]
+
 
 __plugin_name__ = "Webcam Auto Refresh"
-__plugin_version__ = "0.2.0"
+__plugin_version__ = "0.3.0"
 __plugin_description__ = (
-    "Automatically refreshes only the webcam view when the stream changes state."
+    "Automatically updates the webcam view when the stream "
+    "changes state without reloading OctoPrint."
 )
 __plugin_pythoncompat__ = ">=3.10,<4"
 

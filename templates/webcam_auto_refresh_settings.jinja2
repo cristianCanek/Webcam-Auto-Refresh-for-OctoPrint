@@ -1,0 +1,55 @@
+<form class="form-horizontal">
+
+    <div class="control-group">
+        <label class="control-label">
+            Poll interval
+        </label>
+
+        <div class="controls">
+            <div class="input-append">
+                <input
+                    type="number"
+                    min="500"
+                    step="100"
+                    data-bind="
+                        value:
+                        settings.plugins.webcam_auto_refresh.pollInterval
+                    "
+                >
+                <span class="add-on">ms</span>
+            </div>
+
+            <span class="help-block">
+                How often the webcam status is checked.
+                Recommended: 2000 ms.
+            </span>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label class="control-label">
+            Transition delay
+        </label>
+
+        <div class="controls">
+            <div class="input-append">
+                <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    data-bind="
+                        value:
+                        settings.plugins.webcam_auto_refresh.transitionDelay
+                    "
+                >
+                <span class="add-on">ms</span>
+            </div>
+
+            <span class="help-block">
+                Delay before updating the webcam UI after
+                an ON/OFF transition.
+            </span>
+        </div>
+    </div>
+
+</form>
