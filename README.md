@@ -3,26 +3,28 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.4.1
+## Version 0.4.2
 
-Health-check and logging polish release.
+Navbar visual status integration version.
 
-> **Development note:** this release refines the robust webcam health-check logic introduced in v0.4.0 by cleaning up failure-counter behavior and improving recovery logging.
+> **Development note:** this version adds visual webcam state feedback to the OctoPrint navbar while preserving the stable health-check behavior from v0.4.1.
 
 ### Status
 
-Stable robustness release.
-
-### Fixed in v0.4.1
-
-- Stops incrementing the consecutive-failure counter once the webcam is already known to be OFF.
-- Prevents repeated logs such as `3 / 2`, `4 / 2`, and higher while the webcam remains offline.
-- Caps the failure counter at the configured threshold.
-- Adds a recovery log when a transient health-check failure is followed by a successful check.
-- Preserves the failure-threshold protection introduced in v0.4.0.
+Stable visual integration version.
 
 
-### Retained from v0.4.0
+### Added in v0.4.2
+
+- Replaces the webcam System Commands power-style icon with a camera icon.
+- Adds webcam ON/OFF color indication in the OctoPrint navbar.
+- Uses the same ON/OFF colors as the printer power indicator for visual consistency.
+- Updates the camera icon automatically whenever the detected webcam state changes.
+- Adds `Webcam ON` / `Webcam OFF` hover text to the camera icon.
+- Keeps the existing health-check and synchronization behavior unchanged.
+
+
+### Retained from v0.4.1
 
 - Dynamic Classic Webcam snapshot URL discovery.
 - Dynamic Classic Webcam stream URL discovery.
@@ -35,6 +37,7 @@ Stable robustness release.
 - Runtime settings reload without restarting OctoPrint.
 - OctoPrint disconnect/reconnect lifecycle handling.
 - Automatic webcam ON/OFF synchronization.
+- Failure-counter and recovery-log cleanup.
 - No full-page OctoPrint reload.
 
 
@@ -47,6 +50,24 @@ Stable robustness release.
 - Clears and hides the MJPEG image when the webcam goes offline.
 - Rebuilds the MJPEG stream connection when the webcam comes back online.
 - Keeps polling, transition timing, health-check behavior, initial synchronization, and debug logging configurable from OctoPrint Settings.
+- Changes the webcam navbar icon color according to the detected webcam state.
+- Uses a camera icon instead of the default System Commands power icon.
+
+
+### Navbar integration
+
+Version 0.4.2 adds visual webcam state feedback to the OctoPrint navbar.
+
+The System Commands menu used for webcam control is represented by a camera icon:
+
+```text
+Webcam OFF → Camera icon uses the OFF color
+Webcam ON  → Camera icon uses the ON color
+```
+
+The colors are intentionally matched to the printer power indicator so both controls use the same visual language.
+
+The icon state is driven by the webcam state detected by Webcam Auto Refresh, so it also updates when the webcam is controlled indirectly through scripts, smart plugs, or other automation.
 
 
 ### Configuration
@@ -92,7 +113,7 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.4.1 keeps the robust health-check architecture introduced in v0.4.0 and refines how failed and recovered checks are handled.
+Version 0.4.2 keeps the robust health-check architecture from v0.4.1 and adds visual webcam state feedback to the OctoPrint navbar.
 
 Conceptually:
 
@@ -143,6 +164,26 @@ If a health check succeeds before the threshold is reached, the failure counter 
 Once the webcam is considered OFF, additional failed checks no longer increase or repeatedly log the failure counter.
 
 This prevents transient request failures from incorrectly switching the webcam UI to OFF while also avoiding unnecessary log spam during extended offline periods.
+
+Whenever the webcam state is applied to the Classic Webcam UI, the navbar camera icon is updated at the same time.
+
+Conceptually:
+
+```text
+Detected webcam state
+          │
+     ┌────┴────┐
+     │         │
+    ON        OFF
+     │         │
+     ▼         ▼
+Update      Update
+webcam UI   webcam UI
+     │         │
+     ▼         ▼
+Camera      Camera
+ON color    OFF color
+```
 
 
 ### OctoPrint connection lifecycle
@@ -238,6 +279,8 @@ Typical output:
 [Webcam Auto Refresh] UI -> OFF
 ```
 
+Navbar icon updates are applied when the webcam UI state changes. The visual state should therefore remain synchronized with the same ON/OFF transitions reported in the debug log.
+
 
 ## Requirements
 
@@ -278,7 +321,8 @@ plugins/
     ├── __init__.py
     ├── static/
     │   └── js/
-    │       └── webcam_auto_refresh.js
+    │       ├── webcam_auto_refresh.js
+    │       └── navbar_icon_swap.js
     └── templates/
         └── webcam_auto_refresh_settings.jinja2
 ```
@@ -300,7 +344,7 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.4.1)
+Webcam Auto Refresh (0.4.2)
 ```
 
 
@@ -309,6 +353,8 @@ Webcam Auto Refresh (0.4.1)
 - Single-camera design.
 - Direct DOM manipulation depends on the Classic Webcam HTML structure.
 - Health checking depends on a working Classic Webcam snapshot endpoint.
+- Navbar icon customization depends on the current OctoPrint navbar structure and icon classes.
+- The navbar ordering is still unchanged in this release.
 
 
 ## License

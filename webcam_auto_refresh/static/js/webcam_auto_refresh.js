@@ -377,6 +377,10 @@ $(function () {
             image.attr("src", "");
             image.hide();
 
+            if (typeof window.setWebcamNavbarState === "function") {
+                window.setWebcamNavbarState(false);
+            }
+
             self.log("UI -> OFF");
         };
 
@@ -430,6 +434,10 @@ $(function () {
             );
 
             image.show();
+
+            if (typeof window.setWebcamNavbarState === "function") {
+                window.setWebcamNavbarState(true);
+            }
 
             self.log(
                 "UI -> ON",
