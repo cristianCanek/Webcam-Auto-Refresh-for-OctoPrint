@@ -473,19 +473,17 @@ $(function () {
          */
 
         self.processHealthResult = function (healthy) {
-
             let detectedState = null;
-
-
+            
             /*
-            * Successful health check.
-            */
+             * Successful health check.
+             */
             if (healthy) {
 
                 /*
-                * If we had previous failures, log the recovery once
-                * before resetting the counter.
-                */
+                 * If we had previous failures, log the recovery once
+                 * before resetting the counter.
+                 */
                 if (self.consecutiveFailures > 0) {
                     self.log(
                         "Health check recovered - failure counter reset"
@@ -498,10 +496,10 @@ $(function () {
             } else {
 
                 /*
-                * If the webcam is already known to be OFF,
-                * there is no value in continuing to increment
-                * or log the failure counter.
-                */
+                 * If the webcam is already known to be OFF,
+                 * there is no value in continuing to increment
+                 * or log the failure counter.
+                 */
                 if (self.previousState === false) {
                     return;
                 }
@@ -509,8 +507,8 @@ $(function () {
                 self.consecutiveFailures += 1;
 
                 /*
-                * Clamp the counter at the configured threshold.
-                */
+                 * Clamp the counter at the configured threshold.
+                 */
                 self.consecutiveFailures =
                     Math.min(
                         self.consecutiveFailures,
@@ -525,9 +523,9 @@ $(function () {
                 );
 
                 /*
-                * Do not declare OFF until enough consecutive
-                * failures have occurred.
-                */
+                 * Do not declare OFF until enough consecutive
+                 * failures have occurred.
+                 */
                 if (
                     self.consecutiveFailures <
                     self.failureThreshold
@@ -538,10 +536,9 @@ $(function () {
                 detectedState = false;
             }
 
-
             /*
-            * First usable state.
-            */
+             * First usable state.
+             */
             if (self.previousState === null) {
 
                 self.previousState =
@@ -563,17 +560,15 @@ $(function () {
                 return;
             }
 
-
             /*
-            * No state transition.
-            */
+             * No state transition.
+             */
             if (
                 detectedState ===
                 self.previousState
             ) {
                 return;
             }
-
 
             self.log(
                 "State changed:",
@@ -586,10 +581,8 @@ $(function () {
                     : "OFF"
             );
 
-
             self.previousState =
                 detectedState;
-
 
             self.applyState(
                 detectedState

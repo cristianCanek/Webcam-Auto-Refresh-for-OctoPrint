@@ -3,29 +3,33 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.4.2
+## Version 0.4.3
 
-Navbar visual status integration version.
+Navbar layout polish version.
 
-> **Development note:** this version adds visual webcam state feedback to the OctoPrint navbar while preserving the stable health-check behavior from v0.4.1.
+> **Development note:** this version keeps the visual webcam status integration introduced in v0.4.2 and reorders the OctoPrint navbar so plugin controls appear together before native controls.
+
 
 ### Status
 
-Stable visual integration version.
+Stable UI polish version.
 
 
-### Added in v0.4.2
+### Added in v0.4.3
 
-- Replaces the webcam System Commands power-style icon with a camera icon.
-- Adds webcam ON/OFF color indication in the OctoPrint navbar.
-- Uses the same ON/OFF colors as the printer power indicator for visual consistency.
-- Updates the camera icon automatically whenever the detected webcam state changes.
-- Adds `Webcam ON` / `Webcam OFF` hover text to the camera icon.
-- Keeps the existing health-check and synchronization behavior unchanged.
+- Reorders the OctoPrint navbar so plugin-related controls appear together.
+- Places the webcam camera menu immediately after the printer power control.
+- Keeps OctoPrint's native controls, such as Settings, after the plugin controls.
+- Preserves the camera icon and ON/OFF color indication introduced in v0.4.2.
+- Does not change webcam health-checking or synchronization behavior.
 
 
-### Retained from v0.4.1
+### Retained from v0.4.2
 
+- Camera icon for the webcam System Commands menu.
+- Webcam ON/OFF color indication.
+- Visual colors matched to the printer power indicator.
+- `Webcam ON` / `Webcam OFF` hover text.
 - Dynamic Classic Webcam snapshot URL discovery.
 - Dynamic Classic Webcam stream URL discovery.
 - Configurable **Poll interval**.
@@ -52,22 +56,29 @@ Stable visual integration version.
 - Keeps polling, transition timing, health-check behavior, initial synchronization, and debug logging configurable from OctoPrint Settings.
 - Changes the webcam navbar icon color according to the detected webcam state.
 - Uses a camera icon instead of the default System Commands power icon.
+- Reorders the navbar to place the printer power and webcam controls before OctoPrint's native controls.
 
 
 ### Navbar integration
 
-Version 0.4.2 adds visual webcam state feedback to the OctoPrint navbar.
+Version 0.4.3 keeps the camera icon and webcam state colors introduced in v0.4.2 and adds navbar ordering for a cleaner layout.
 
-The System Commands menu used for webcam control is represented by a camera icon:
+Expected order:
+
+```text
+Power → Camera → Settings → Notifications → Warnings → User
+```
+
+The printer power and webcam controls are therefore grouped together before OctoPrint's native controls.
+
+The webcam camera icon continues to reflect the detected webcam state:
 
 ```text
 Webcam OFF → Camera icon uses the OFF color
 Webcam ON  → Camera icon uses the ON color
 ```
 
-The colors are intentionally matched to the printer power indicator so both controls use the same visual language.
-
-The icon state is driven by the webcam state detected by Webcam Auto Refresh, so it also updates when the webcam is controlled indirectly through scripts, smart plugs, or other automation.
+The colors remain intentionally matched to the printer power indicator for visual consistency.
 
 
 ### Configuration
@@ -113,7 +124,7 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.4.2 keeps the robust health-check architecture from v0.4.1 and adds visual webcam state feedback to the OctoPrint navbar.
+Version 0.4.3 keeps the webcam health-check and visual status behavior from v0.4.2 and adds a final navbar layout adjustment.
 
 Conceptually:
 
@@ -184,6 +195,24 @@ webcam UI   webcam UI
 Camera      Camera
 ON color    OFF color
 ```
+
+After OctoPrint builds the navbar, the webcam System Commands menu is moved immediately after the printer power control.
+
+Conceptually:
+
+```text
+Before v0.4.3
+
+Power → Settings → Camera → ...
+
+        ↓
+
+v0.4.3
+
+Power → Camera → Settings → ...
+```
+
+This is a visual ordering change only; webcam detection and synchronization logic are unchanged.
 
 
 ### OctoPrint connection lifecycle
@@ -279,7 +308,9 @@ Typical output:
 [Webcam Auto Refresh] UI -> OFF
 ```
 
-Navbar icon updates are applied when the webcam UI state changes. The visual state should therefore remain synchronized with the same ON/OFF transitions reported in the debug log.
+Navbar icon updates remain synchronized with webcam ON/OFF transitions.
+
+In v0.4.3, the camera menu is additionally repositioned after the printer power control when the navbar is initialized.
 
 
 ## Requirements
@@ -344,7 +375,7 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.4.2)
+Webcam Auto Refresh (0.4.3)
 ```
 
 
@@ -353,8 +384,7 @@ Webcam Auto Refresh (0.4.2)
 - Single-camera design.
 - Direct DOM manipulation depends on the Classic Webcam HTML structure.
 - Health checking depends on a working Classic Webcam snapshot endpoint.
-- Navbar icon customization depends on the current OctoPrint navbar structure and icon classes.
-- The navbar ordering is still unchanged in this release.
+- Navbar icon customization and ordering depend on the current OctoPrint navbar structure and icon classes.
 
 
 ## License

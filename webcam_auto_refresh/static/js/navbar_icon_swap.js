@@ -7,6 +7,47 @@ $(function () {
     function getCameraNavbarIcon() {
         return $("#navbar_systemmenu > a > i");
     }
+    
+    function reorderNavbarItems() {
+        const systemMenu = $("#navbar_systemmenu").closest("li");
+
+        /*
+         * TP-Link Smartplug icon.
+         *
+         * Buscamos el icono power del smartplug dentro del navbar
+         * y tomamos su <li> contenedor.
+         */
+        let powerMenu = null;
+
+        $(".navbar i.icon-off").each(function () {
+            const item = $(this).closest("li");
+
+            /*
+             * Evitamos confundir el antiguo System menu con el
+             * smartplug. Nuestro System menu ya debe usar icon-camera.
+             */
+            if (
+                item.length &&
+                !item.is(systemMenu)
+            ) {
+                powerMenu = item;
+                return false;
+            }
+        });
+
+        if (
+            powerMenu &&
+            powerMenu.length &&
+            systemMenu.length
+        ) {
+            /*
+             * Resultado:
+             *
+             * Power -> Camera -> resto del navbar
+             */
+            systemMenu.insertAfter(powerMenu);
+        }
+    }
 
     function updateNavbarIcons() {
 
@@ -25,7 +66,6 @@ $(function () {
                 )
                 .addClass("icon-camera");
         }
-
 
         /*
          * TP-Link fallback:
@@ -47,7 +87,6 @@ $(function () {
             }
         });
     }
-
 
     /*
      * Public function used by webcam_auto_refresh.js
@@ -75,10 +114,14 @@ $(function () {
         );
     };
 
+    function updateNavbar() {
+        updateNavbarIcons();
+        reorderNavbarItems();
+    }
 
-    updateNavbarIcons();
+    updateNavbar();
 
-    setTimeout(updateNavbarIcons, 250);
-    setTimeout(updateNavbarIcons, 1000);
-    setTimeout(updateNavbarIcons, 2500);
+    setTimeout(updateNavbar, 250);
+    setTimeout(updateNavbar, 1000);
+    setTimeout(updateNavbar, 2500);
 });
