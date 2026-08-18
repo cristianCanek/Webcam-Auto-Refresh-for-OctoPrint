@@ -3,42 +3,34 @@
 **Webcam Auto Refresh for OctoPrint** is a small OctoPrint plugin created to keep the **Classic Webcam** view synchronized with an MJPEG webcam stream that can be started and stopped independently from OctoPrint.
 
 
-## Version 0.3.2
+## Version 0.3.3
 
-Restored working automatic webcam state synchronization by correctly discovering the Classic Webcam ViewModel after OctoPrint finished binding its ViewModels.
+Polished stable version of the 0.3.x branch.
 
-> **Development note:** this version restored the functionality that was broken in v0.3.0 and v0.3.1, but introduced a visual layout issue in the offline state.
-
+> **Development note:** this version fixes the offline layout issue introduced in v0.3.2 while preserving the working Classic Webcam ViewModel integration.
 
 ### Status
 
-Working, with a known offline layout issue.
+Stable 0.3.x version.
 
+### Fixed in v0.3.3
 
-### Fixed in v0.3.2
-
-- Correctly discovers `ClassicWebcamViewModel` after all OctoPrint ViewModels are bound.
-- Restores automatic webcam ON/OFF synchronization.
-- Retrieves the configured MJPEG stream URL from Classic Webcam.
-- Restores automatic stream reconnection when the webcam comes back online.
+- Removes the custom offline status panel introduced in v0.3.2.
+- Prevents the Classic Webcam section from becoming unnecessarily tall while the webcam is OFF.
+- Preserves automatic webcam ON/OFF synchronization without reloading the full OctoPrint page.
 
 
 ### Retained from previous versions
 
 - Snapshot-based webcam health checking.
+- Correct discovery of `ClassicWebcamViewModel`.
+- Dynamic retrieval of the configured MJPEG stream URL.
+- Automatic webcam ON/OFF synchronization.
+- Automatic stream reconnection.
 - OctoPrint Settings page.
 - Configurable **Poll interval**.
 - Configurable **Transition delay**.
 - No full-page OctoPrint reload.
-
-
-### Known issue
-
-When the webcam goes offline, this version adds a custom offline panel inside the Classic Webcam container.
-
-Because Classic Webcam already maintains its own offline area, the webcam section becomes approximately twice as tall while the stream is unavailable.
-
-This layout issue was fixed in v0.3.3.
 
 
 ### Behavior
@@ -82,7 +74,7 @@ Likewise, when the stream is started again, the webcam view may remain offline u
 
 ## How it works
 
-Version 0.3.2 fixes the ViewModel integration attempted in v0.3.1.
+Version 0.3.3 keeps the ViewModel integration introduced in v0.3.2 and fixes the offline layout behavior.
 
 Instead of expecting Classic Webcam to be available as a direct dependency, the plugin waits until OctoPrint has finished binding its ViewModels and searches the complete ViewModel list for `ClassicWebcamViewModel`.
 
@@ -120,16 +112,11 @@ When the webcam comes online, the stream URL is obtained from `ClassicWebcamView
 
 When the webcam goes offline, the MJPEG image is cleared and hidden.
 
-This restored automatic webcam synchronization without reloading the full OctoPrint page.
+This preserves automatic webcam synchronization without reloading the full OctoPrint page.
 
+Unlike v0.3.2, this version does not create an additional offline status panel.
 
-### Offline layout issue
-
-This version also creates its own offline status panel inside the Classic Webcam container.
-
-Because Classic Webcam already renders its own offline area, the result is an unnecessarily tall webcam section while the camera is OFF.
-
-This issue is corrected in v0.3.3.
+When the webcam goes offline, the MJPEG image is simply cleared and hidden, allowing Classic Webcam to retain its normal layout.
 
 
 ## Example use case
@@ -270,13 +257,12 @@ docker logs octoprint 2>&1 | grep -i "Webcam Auto Refresh"
 Expected output:
 
 ```text
-Webcam Auto Refresh (0.3.2)
+Webcam Auto Refresh (0.3.3)
 ```
 
 
 ## Limitations
 
-- The custom offline panel causes the Classic Webcam area to become approximately twice as tall while the webcam is OFF.
 - Snapshot health checking still depends on the expected webcam endpoint.
 - No transient-failure protection.
 - Single-camera design.

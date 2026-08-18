@@ -126,20 +126,6 @@ $(function () {
         };
 
 
-        self.getWebcamContainer = function () {
-            return $("#classicwebcam_container");
-        };
-
-
-        self.removeOfflineMessage = function () {
-            $("#classicwebcam_container")
-                .find(
-                    ".webcam-auto-refresh-offline"
-                )
-                .remove();
-        };
-
-
         /*
          * ------------------------------------------------------
          * OFF state
@@ -150,35 +136,15 @@ $(function () {
             const image =
                 self.getWebcamImage();
 
-            const container =
-                self.getWebcamContainer();
-
             /*
-             * Muy importante:
-             * rompemos la conexión MJPEG anterior.
-             */
+            * Cortamos la conexión MJPEG y ocultamos sólo la imagen.
+            * No insertamos ningún elemento adicional en el contenedor.
+            *
+            * Así dejamos que Classic Webcam muestre su propio estado
+            * "Webcam stream not loaded".
+            */
             image.attr("src", "");
             image.hide();
-
-            self.removeOfflineMessage();
-
-            container.append(
-                '<div ' +
-                'class="webcam-auto-refresh-offline" ' +
-                'style="' +
-                'display:flex;' +
-                'align-items:center;' +
-                'justify-content:center;' +
-                'height:100%;' +
-                'min-height:300px;' +
-                'background:#111;' +
-                'color:#fff;' +
-                'font-weight:bold;' +
-                'text-align:center;' +
-                '">' +
-                'Webcam stream not available' +
-                '</div>'
-            );
 
             self.log("UI -> OFF");
         };
@@ -194,14 +160,8 @@ $(function () {
             const image =
                 self.getWebcamImage();
 
-            self.removeOfflineMessage();
-
             let streamUrl = null;
 
-            /*
-             * Leemos la URL directamente del
-             * ClassicWebcamViewModel real.
-             */
             try {
                 streamUrl =
                     self.classicWebcamViewModel
@@ -210,8 +170,7 @@ $(function () {
             } catch (error) {
                 console.error(
                     "[Webcam Auto Refresh] " +
-                    "Could not obtain Classic Webcam " +
-                    "stream URL",
+                    "Could not obtain Classic Webcam stream URL",
                     error
                 );
 
@@ -227,9 +186,6 @@ $(function () {
                 return;
             }
 
-            /*
-             * Cache buster explícito.
-             */
             const separator =
                 streamUrl.includes("?")
                     ? "&"
